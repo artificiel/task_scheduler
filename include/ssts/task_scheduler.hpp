@@ -126,10 +126,11 @@ public:
      * Creates a ssts::task_scheduler instance. 
      * The number of threads to be used by the ssts::task_pool defaults to the number of threads supported by the platform.
      */
-    explicit task_scheduler(const unsigned int num_threads = std::thread::hardware_concurrency())
+    explicit task_scheduler(const unsigned int num_threads = std::thread::hardware_concurrency(), ssts::clock::duration warm = 0ms)
     : _tp{num_threads}
     , _is_running{true}
     , _is_duplicate_allowed{ true }
+	, _warm(warm)
     {
     }
 
@@ -180,7 +181,7 @@ public:
                     // Check if the condition variable _update_tasks_cv is triggered because of a timeout (i.e. _next_task_timepoint has just been reached),
                     // or because of a new notification (i.e. a new task has been enqueued and the condition variable is notified): 
                     // in case of a timeout proceed with update_tasks(), otherwise continue.
-                    _next_task_timepoint = _tasks.begin()->first;
+                    _next_task_timepoint = _tasks.begin()->first - _warm;
                     if (_update_tasks_cv.wait_until(lock, _next_task_timepoint.load()) == std::cv_status::no_timeout)
                         continue;
                 }
@@ -496,6 +497,7 @@ private:
     std::mutex _update_tasks_mtx;
     std::hash<std::string> _hasher;
     std::atomic<ssts::clock::time_point> _next_task_timepoint;
+	const ssts::clock::duration _warm;
 
     void add_task(ssts::clock::time_point&& timepoint, schedulable_task&& st)
     {
